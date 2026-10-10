@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShortLink 短链接服务</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", sans-serif;
+      background: #f5f6f8;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      padding: 2rem;
+      width: min(520px, 92vw);
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+    p.sub { color: #667085; margin: 0 0 1.25rem; font-size: 0.9rem; }
+    label { display: block; font-size: 0.85rem; color: #344054; margin: 0.9rem 0 0.35rem; }
+    input {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid #d0d5dd;
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    input:focus { outline: 2px solid #4a7dff; border-color: #4a7dff; }
+    button {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: 0.65rem;
+      background: #2456e6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover { background: #1c46c2; }
+    button:disabled { background: #a5b4fc; cursor: wait; }
+    .result {
+      margin-top: 1.25rem;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      display: none;
+      line-height: 1.6;
+    }
+    .result.ok { display: block; background: #eaf7ee; border: 1px solid #bfe6cb; }
+    .result.err { display: block; background: #fdecec; border: 1px solid #f2c4c4; color: #9f1d1d; }
+    .result a { color: #1a56c4; word-break: break-all; }
+    code { background: #f0f2f5; padding: 0.1rem 0.4rem; border-radius: 4px; }
+    .muted { color: #667085; word-break: break-all; }
+  </style>
+</head>
+<body>
+<main class="card">
+  <h1>ShortLink 短链接服务</h1>
+  <p class="sub">输入长网址，生成形如 <code>http://localhost:8000/xxxxxx</code> 的短链接</p>
+
+  <form id="shorten-form">
+    <label for="url">长网址（仅支持 http/https）</label>
+    <input id="url" type="text" placeholder="https://example.com/some/very/long/url" required>
+
+    <label for="custom_code">自定义短码（可选：4–16 位，字母 / 数字 / - / _）</label>
+    <input id="custom_code" type="text" placeholder="留空则随机生成 6 位短码">
+
+    <button type="submit" id="submit-btn">生成短链接</button>
+  </form>
+
+  <div id="result" class="result"></div>
+</main>
+
+<script>
+  const form = document.getElementById('shorten-form');
+  const resultBox = document.getElementById('result');
+  const submitBtn = document.getElementById('submit-btn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = document.getElementById('url').value.trim();
+    const customCode = document.getElementById('custom_code').value.trim();
+    const payload = { url };
+    if (customCode) payload.custom_code = customCode;
+
+    resultBox.className = 'result';
+    resultBox.replaceChildren();
+    submitBtn.disabled = true;
+
+    try {
+      const res = await fetch('/api/shorten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError(`[${res.status}] ${data.error || '请求失败'}`);
+        return;
+      }
+      showResult(data);
+    } catch (err) {
+      showError('网络错误：' + err.message);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  function showResult(data) {
+    resultBox.className = 'result ok';
+
+    const line1 = document.createElement('div');
+    const label1 = document.createElement('strong');
+    label1.textContent = '短链接：';
+    const a = document.createElement('a');
+    a.href = data.short_url;
+    a.textContent = data.short_url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    line1.append(label1, a);
+
+    const line2 = document.createElement('div');
+    line2.className = 'muted';
+    line2.textContent = '原始网址：' + data.original_url;
+
+    resultBox.append(line1, line2);
+  }
+
+  function showError(message) {
+    resultBox.className = 'result err';
+    resultBox.textContent = message;
+  }
+</script>
+</body>
+</html>
