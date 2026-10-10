@@ -21,12 +21,17 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS links (
                 short_code      TEXT PRIMARY KEY,
                 original_url    TEXT NOT NULL,
+                password_hash   TEXT,
                 visit_count     INTEGER NOT NULL DEFAULT 0,
                 created_at      TEXT NOT NULL,
                 last_visited_at TEXT
             )
             """
         )
+        # 旧库迁移：为已存在的 links 表补充 password_hash 列
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(links)")}
+        if "password_hash" not in columns:
+            conn.execute("ALTER TABLE links ADD COLUMN password_hash TEXT")
 
 
 def code_exists(short_code: str) -> bool:
@@ -37,24 +42,50 @@ def code_exists(short_code: str) -> bool:
         return row is not None
 
 
-def create_link(short_code: str, original_url: str) -> None:
+def create_link(short_code: str, original_url: str, password_hash: str | None = None) -> None:
     """插入一条短链记录；短码重复时抛出 sqlite3.IntegrityError。"""
     now = datetime.now(timezone.utc).isoformat()
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO links (short_code, original_url, visit_count, created_at)"
-            " VALUES (?, ?, 0, ?)",
-            (short_code, original_url, now),
+            "INSERT INTO links (short_code, original_url, password_hash, visit_count, created_at)"
+            " VALUES (?, ?, ?, 0, ?)",
+            (short_code, original_url, password_hash, now),
         )
+
+
+def update_link_url(short_code: str, original_url: str) -> bool:
+    """更新短码指向的原网址（不影响访问统计）；短码不存在时返回 False。"""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE links SET original_url = ? WHERE short_code = ?",
+            (original_url, short_code),
+        )
+        return cur.rowcount > 0
 
 
 def get_link(short_code: str) -> sqlite3.Row | None:
     with _connect() as conn:
         return conn.execute(
-            "SELECT short_code, original_url, visit_count, created_at, last_visited_at"
+            "SELECT short_code, original_url, password_hash, visit_count, created_at, last_visited_at"
             " FROM links WHERE short_code = ?",
             (short_code,),
         ).fetchone()
+
+
+def count_links() -> int:
+    with _connect() as conn:
+        return conn.execute("SELECT COUNT(*) FROM links").fetchone()[0]
+
+
+def list_links(page: int, page_size: int) -> list[sqlite3.Row]:
+    """按创建时间倒序返回一页短链记录（rowid 作并列时的稳定排序）。"""
+    offset = (page - 1) * page_size
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT short_code, original_url, visit_count, created_at, last_visited_at"
+            " FROM links ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?",
+            (page_size, offset),
+        ).fetchall()
 
 
 def record_visit(short_code: str) -> None:

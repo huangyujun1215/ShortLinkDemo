@@ -57,6 +57,16 @@
     .result.ok { display: block; background: #eaf7ee; border: 1px solid #bfe6cb; }
     .result.err { display: block; background: #fdecec; border: 1px solid #f2c4c4; color: #9f1d1d; }
     .result a { color: #1a56c4; word-break: break-all; }
+    .tag {
+      display: inline-block;
+      margin-left: 0.5rem;
+      padding: 0.05rem 0.45rem;
+      border-radius: 999px;
+      background: #fef3c7;
+      border: 1px solid #f5d68a;
+      color: #92600a;
+      font-size: 0.75rem;
+    }
     code { background: #f0f2f5; padding: 0.1rem 0.4rem; border-radius: 4px; }
     .muted { color: #667085; word-break: break-all; }
   </style>
@@ -73,6 +83,9 @@
     <label for="custom_code">自定义短码（可选：4–16 位，字母 / 数字 / - / _）</label>
     <input id="custom_code" type="text" placeholder="留空则随机生成 6 位短码">
 
+    <label for="password">访问密码（可选：1–32 个可见字符）</label>
+    <input id="password" type="password" placeholder="留空则任何人可访问短链">
+
     <button type="submit" id="submit-btn">生成短链接</button>
   </form>
 
@@ -88,8 +101,10 @@
     e.preventDefault();
     const url = document.getElementById('url').value.trim();
     const customCode = document.getElementById('custom_code').value.trim();
+    const password = document.getElementById('password').value;
     const payload = { url };
     if (customCode) payload.custom_code = customCode;
+    if (password) payload.password = password;
 
     resultBox.className = 'result';
     resultBox.replaceChildren();
@@ -126,6 +141,12 @@
     a.target = '_blank';
     a.rel = 'noopener';
     line1.append(label1, a);
+    if (data.has_password) {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = '已开启密码保护';
+      line1.append(tag);
+    }
 
     const line2 = document.createElement('div');
     line2.className = 'muted';
